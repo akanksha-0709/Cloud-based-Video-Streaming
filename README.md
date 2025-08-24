@@ -276,7 +276,7 @@ aws cloudfront create-invalidation --distribution-id YOUR_DISTRIBUTION_ID --path
 
 ## 🤝 Contributing
 
-This is a freelance project. For questions or modifications, please refer to the project requirements document.
+For questions or modifications, please refer to the project requirements document.
 
 ## 📄 License
 
