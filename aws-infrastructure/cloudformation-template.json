@@ -1,0 +1,361 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Video Streaming Platform Infrastructure",
+  "Parameters": {
+    "ProjectName": {
+      "Type": "String",
+      "Default": "video-streaming-platform",
+      "Description": "Name of the project"
+    },
+    "Environment": {
+      "Type": "String",
+      "Default": "dev",
+      "AllowedValues": ["dev", "staging", "prod"],
+      "Description": "Environment name"
+    }
+  },
+  "Resources": {
+    "VideosBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "${ProjectName}-videos-${Environment}"
+        },
+        "CorsConfiguration": {
+          "CorsRules": [
+            {
+              "AllowedHeaders": ["*"],
+              "AllowedMethods": ["GET", "PUT", "POST", "DELETE", "HEAD"],
+              "AllowedOrigins": ["*"],
+              "ExposedHeaders": ["ETag"],
+              "MaxAge": 3000
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "VideoLifecycleRule",
+              "Status": "Enabled",
+              "Transitions": [
+                {
+                  "TransitionInDays": 30,
+                  "StorageClass": "STANDARD_IA"
+                },
+                {
+                  "TransitionInDays": 90,
+                  "StorageClass": "GLACIER"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "ThumbnailsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "${ProjectName}-thumbnails-${Environment}"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": false,
+          "BlockPublicPolicy": false,
+          "IgnorePublicAcls": false,
+          "RestrictPublicBuckets": false
+        }
+      }
+    },
+    "VideosTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "${ProjectName}-videos-${Environment}"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "id",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "uploader",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "uploadDate",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "id",
+            "KeyType": "HASH"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "UploaderDateIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "uploader",
+                "KeyType": "HASH"
+              },
+              {
+                "AttributeName": "uploadDate",
+                "KeyType": "RANGE"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            },
+            "BillingMode": "PAY_PER_REQUEST"
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        }
+      }
+    },
+    "UsersTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "${ProjectName}-users-${Environment}"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "id",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "email",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "id",
+            "KeyType": "HASH"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "EmailIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "email",
+                "KeyType": "HASH"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            },
+            "BillingMode": "PAY_PER_REQUEST"
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST"
+      }
+    },
+    "AnalyticsTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "${ProjectName}-analytics-${Environment}"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "videoId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "timestamp",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "videoId",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "timestamp",
+            "KeyType": "RANGE"
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "TimeToLiveSpecification": {
+          "AttributeName": "ttl",
+          "Enabled": true
+        }
+      }
+    },
+    "UserPool": {
+      "Type": "AWS::Cognito::UserPool",
+      "Properties": {
+        "UserPoolName": {
+          "Fn::Sub": "${ProjectName}-users-${Environment}"
+        },
+        "AutoVerifiedAttributes": ["email"],
+        "Policies": {
+          "PasswordPolicy": {
+            "MinimumLength": 8,
+            "RequireUppercase": true,
+            "RequireLowercase": true,
+            "RequireNumbers": true,
+            "RequireSymbols": false
+          }
+        },
+        "Schema": [
+          {
+            "Name": "email",
+            "AttributeDataType": "String",
+            "Required": true,
+            "Mutable": true
+          },
+          {
+            "Name": "name",
+            "AttributeDataType": "String",
+            "Required": true,
+            "Mutable": true
+          }
+        ]
+      }
+    },
+    "UserPoolClient": {
+      "Type": "AWS::Cognito::UserPoolClient",
+      "Properties": {
+        "ClientName": {
+          "Fn::Sub": "${ProjectName}-client-${Environment}"
+        },
+        "UserPoolId": {
+          "Ref": "UserPool"
+        },
+        "GenerateSecret": false,
+        "ExplicitAuthFlows": [
+          "ALLOW_USER_SRP_AUTH",
+          "ALLOW_REFRESH_TOKEN_AUTH"
+        ]
+      }
+    },
+    "CloudFrontDistribution": {
+      "Type": "AWS::CloudFront::Distribution",
+      "Properties": {
+        "DistributionConfig": {
+          "Origins": [
+            {
+              "Id": "VideosOrigin",
+              "DomainName": {
+                "Fn::GetAtt": ["VideosBucket", "RegionalDomainName"]
+              },
+              "S3OriginConfig": {
+                "OriginAccessIdentity": {
+                  "Fn::Sub": "origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}"
+                }
+              }
+            },
+            {
+              "Id": "ThumbnailsOrigin",
+              "DomainName": {
+                "Fn::GetAtt": ["ThumbnailsBucket", "RegionalDomainName"]
+              },
+              "S3OriginConfig": {
+                "OriginAccessIdentity": {
+                  "Fn::Sub": "origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}"
+                }
+              }
+            }
+          ],
+          "DefaultCacheBehavior": {
+            "TargetOriginId": "VideosOrigin",
+            "ViewerProtocolPolicy": "redirect-to-https",
+            "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
+            "OriginRequestPolicyId": "88a5eaf4-2fd4-4709-b370-b4c650ea3fcf"
+          },
+          "CacheBehaviors": [
+            {
+              "PathPattern": "/thumbnails/*",
+              "TargetOriginId": "ThumbnailsOrigin",
+              "ViewerProtocolPolicy": "redirect-to-https",
+              "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
+            }
+          ],
+          "Enabled": true,
+          "HttpVersion": "http2"
+        }
+      }
+    },
+    "CloudFrontOriginAccessIdentity": {
+      "Type": "AWS::CloudFront::CloudFrontOriginAccessIdentity",
+      "Properties": {
+        "CloudFrontOriginAccessIdentityConfig": {
+          "Comment": {
+            "Fn::Sub": "OAI for ${ProjectName}-${Environment}"
+          }
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "VideosBucketName": {
+      "Description": "Name of the S3 bucket for videos",
+      "Value": {
+        "Ref": "VideosBucket"
+      }
+    },
+    "ThumbnailsBucketName": {
+      "Description": "Name of the S3 bucket for thumbnails",
+      "Value": {
+        "Ref": "ThumbnailsBucket"
+      }
+    },
+    "VideosTableName": {
+      "Description": "Name of the DynamoDB table for videos",
+      "Value": {
+        "Ref": "VideosTable"
+      }
+    },
+    "UsersTableName": {
+      "Description": "Name of the DynamoDB table for users",
+      "Value": {
+        "Ref": "UsersTable"
+      }
+    },
+    "AnalyticsTableName": {
+      "Description": "Name of the DynamoDB table for analytics",
+      "Value": {
+        "Ref": "AnalyticsTable"
+      }
+    },
+    "UserPoolId": {
+      "Description": "ID of the Cognito User Pool",
+      "Value": {
+        "Ref": "UserPool"
+      }
+    },
+    "UserPoolClientId": {
+      "Description": "ID of the Cognito User Pool Client",
+      "Value": {
+        "Ref": "UserPoolClient"
+      }
+    },
+    "CloudFrontDistributionId": {
+      "Description": "ID of the CloudFront Distribution",
+      "Value": {
+        "Ref": "CloudFrontDistribution"
+      }
+    },
+    "CloudFrontDomainName": {
+      "Description": "Domain name of the CloudFront Distribution",
+      "Value": {
+        "Fn::GetAtt": ["CloudFrontDistribution", "DomainName"]
+      }
+    }
+  }
+}

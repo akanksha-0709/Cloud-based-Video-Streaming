@@ -1,0 +1,25 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "Video Streaming API",
+    "version": "1.0"
+  },
+  "paths": {
+    "/upload": {
+      "post": {
+        "summary": "Upload a video",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/${lambda_upload_arn}/invocations",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        },
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    }
+  }
+}
